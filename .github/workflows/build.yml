@@ -6,6 +6,11 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  schedule:
+    # Rebuild weekly on Monday at 06:00 UTC to pick up latest
+    # Debian base image and package security updates
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -54,5 +59,6 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
+          # Skip cache on scheduled builds to ensure fresh base image and packages
+          cache-from: ${{ github.event_name != 'schedule' && 'type=gha' || '' }}
           cache-to: type=gha,mode=max

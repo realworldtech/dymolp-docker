@@ -1,0 +1,85 @@
+name: Check for Submodule Updates
+
+on:
+  schedule:
+    # Run weekly on Monday at 07:00 UTC (1 hour after the rebuild)
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Check for upstream submodule updates
+        id: check
+        run: |
+          cd Drivers
+          CURRENT=$(git rev-parse HEAD)
+          git fetch origin
+          LATEST=$(git rev-parse origin/HEAD 2>/dev/null || git rev-parse origin/master 2>/dev/null || git rev-parse origin/main 2>/dev/null)
+
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+
+          if [ "$CURRENT" != "$LATEST" ]; then
+            echo "has_updates=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Submodule has updates: $CURRENT -> $LATEST"
+          else
+            echo "has_updates=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Submodule is up to date at $CURRENT"
+          fi
+
+      - name: Update submodule and create PR
+        if: steps.check.outputs.has_updates == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="auto/update-drivers-submodule"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Create or reset the update branch
+          git checkout -B "$BRANCH"
+
+          # Update submodule to latest upstream commit
+          cd Drivers
+          git checkout ${{ steps.check.outputs.latest }}
+          cd ..
+
+          git add Drivers
+          git commit -m "Update Drivers submodule to latest upstream
+
+          ${{ steps.check.outputs.current }} -> ${{ steps.check.outputs.latest }}"
+
+          git push -u origin "$BRANCH" --force
+
+          # Create PR if one doesn't already exist
+          EXISTING=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$EXISTING" ]; then
+            gh pr create \
+              --title "Update Drivers submodule to latest upstream" \
+              --body "$(cat <<'EOF'
+          Automated update of the `Drivers` submodule to the latest upstream commit from [dymosoftware/Drivers](https://github.com/dymosoftware/Drivers).
+
+          **Previous:** `${{ steps.check.outputs.current }}`
+          **Updated:** `${{ steps.check.outputs.latest }}`
+
+          This PR was created automatically by the submodule update check workflow.
+          Please review and test before merging.
+          EOF
+          )" \
+              --head "$BRANCH" \
+              --base main
+          fi
