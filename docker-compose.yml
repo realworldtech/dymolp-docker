@@ -1,0 +1,25 @@
+services:
+  cups:
+    build: .
+    ports:
+      - "631:631"
+    environment:
+      - CUPS_USER=admin
+      - CUPS_PASSWORD=admin
+      - PRINTER_NAME=DYMO-5XL
+      - PRINTER_URI=socket://10.66.66.18:9100
+      - PRINTER_PPD=lw5xl.ppd
+      - PRINTER_DESCRIPTION=DYMO LabelWriter 5XL
+    volumes:
+      - cups-config:/etc/cups
+      - cups-spool:/var/spool/cups
+    restart: unless-stopped
+    # For Linux hosts, uncomment network_mode for Avahi multicast:
+    # network_mode: host
+    # Uncomment for USB passthrough (Linux only):
+    # devices:
+    #   - /dev/bus/usb:/dev/bus/usb
+
+volumes:
+  cups-config:
+  cups-spool:

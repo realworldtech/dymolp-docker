@@ -1,0 +1,7 @@
+.git
+docs/
+Drivers/.git
+Drivers/LW4xx Linux/
+Drivers/LW5xx_245/
+**/*.o
+**/*.a
